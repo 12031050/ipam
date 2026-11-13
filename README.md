@@ -25,11 +25,18 @@
 
 > ### 👉 https://raw.githubusercontent.com/12031050/ipam/main/IPAM-1.0.3.fpk
 
-备用地址：
+其他入口：
 
 - [仓库内安装包文件](IPAM-1.0.3.fpk)（在 GitHub 文件列表中打开后点 `Download raw file`）
-- [Releases 发布页](https://github.com/12031050/ipam/releases)
+- [Tags / Releases](https://github.com/12031050/ipam/releases)：已推送 `v1.0.3` 标签，后续版本将在此发布
 - 历史版本与变更说明见 [CHANGELOG.md](CHANGELOG.md)
+
+获取源码：
+
+```bash
+git clone https://github.com/12031050/ipam.git
+cd ipam
+```
 
 下载后可校验完整性（在飞牛 SSH 终端或本机执行）：
 
