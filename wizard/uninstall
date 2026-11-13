@@ -1,0 +1,22 @@
+[
+  {
+    "stepTitle": "数据处理",
+    "items": [
+      {
+        "type": "radio",
+        "field": "wizard_keep_data",
+        "label": "卸载时如何处理 IP 台账数据",
+        "initValue": "keep",
+        "options": [
+          { "value": "keep", "label": "保留数据（推荐，便于日后重装）" },
+          { "value": "delete", "label": "删除全部数据（不可恢复）" }
+        ]
+      },
+      {
+        "type": "tips",
+        "field": "wizard_uninstall_tip",
+        "helpText": "数据位于应用数据目录（含 SQLite 数据库、备份文件与导出文件）。选择删除前请先在「备份恢复」中下载备份。"
+      }
+    ]
+  }
+]

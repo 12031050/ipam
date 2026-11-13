@@ -1,0 +1,15 @@
+# fnOS 生命周期脚本在 Linux 上执行，CRLF 会导致 #!/bin/bash 解析失败。
+# 统一以 LF 入库、以 LF 检出，避免 Windows 端 core.autocrlf 污染脚本。
+* text=auto eol=lf
+
+# 二进制资源不做任何换行转换（.fpk 是 tar.gz，被误转即损坏）
+*.png binary
+*.PNG binary
+*.jpg binary
+*.JPG binary
+*.jpeg binary
+*.fpk binary
+*.FPK binary
+*.db binary
+*.gz binary
+*.tgz binary

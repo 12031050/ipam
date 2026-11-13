@@ -1,0 +1,33 @@
+# ---- 项目本地数据（不入库） ----
+.workbuddy/
+
+# ---- 运行与构建产物 ----
+__pycache__/
+*.py[cod]
+*.log
+*.db
+*.db-wal
+*.db-shm
+*.pid
+backups/
+exports/
+data/
+etc/
+
+# ---- 临时文件 / 预览 / 本地克隆 ----
+.tmp_*
+.tmp_*/
+.tmp_remote/
+.local/
+
+# ---- 编辑器与系统 ----
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# ---- 第三方原始程序：版权原因，绝不入库 ----
+# 注意：IPAM-*.fpk 是本项目的交付成品，必须保留在版本库中，不要加入忽略规则。
+IP地址管理网页版V1.3/
+*.exe

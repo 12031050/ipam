@@ -1,0 +1,91 @@
+#!/bin/bash
+# 安装后：写入品牌/联系信息、初始化数据库与管理员账号
+set -u
+LOG_FILE="${TRIM_TEMP_LOGFILE:-/dev/null}"
+APPDEST="${TRIM_APPDEST:-/var/apps/IPAM/target}"
+PKGVAR="${TRIM_PKGVAR:-/var/apps/IPAM/var}"
+PKGETC="${TRIM_PKGETC:-/var/apps/IPAM/etc}"
+SERVER="$APPDEST/server/server.py"
+
+fail() {
+    echo "IPAM: $1" > "$LOG_FILE"
+    echo "IPAM: $1" >&2
+    exit 1
+}
+
+PY=""
+for p in /var/apps/python312/target/bin/python3 /usr/bin/python3 /usr/local/bin/python3; do
+    if [ -x "$p" ]; then PY="$p"; break; fi
+done
+[ -n "$PY" ] || PY=$(command -v python3 2>/dev/null || true)
+[ -n "$PY" ] || fail "未找到 Python 3 运行环境。"
+[ -f "$SERVER" ] || fail "应用文件不完整，缺少 server.py。"
+
+mkdir -p "$PKGVAR" "$PKGETC"
+
+# 1) 品牌与联系信息：包内默认为作者信息，安装向导填写的非空值优先
+"$PY" - "$PKGETC/branding.json" "$APPDEST/branding.json" <<'PYEOF'
+import json, os, sys
+from datetime import datetime
+path = sys.argv[1]
+MAXLEN = 1000
+data = {
+    "app_name": "IP 地址管理", "owner_name": "梦非常浪漫",
+    "contact_email": "12031050@qq.com", "contact": "QQ群：416290431",
+    "website": "", "source_url": "https://github.com/12031050/ipam.git",
+    "copyright": "",
+    "disclaimer": (
+        "本软件为开源项目，按「现状」（AS IS）提供，作者及贡献者不提供任何明示或暗示的担保，"
+        "包括但不限于对适销性、特定用途适用性与非侵权性的担保。在任何情况下，作者与贡献者均不对"
+        "因使用本软件或与之相关的任何直接、间接、偶然、特殊、惩罚性或后果性损害（包括但不限于"
+        "数据丢失、业务中断、利润损失）承担责任，即使已被告知此类损害的可能性。使用者须自行评估"
+        "并承担使用风险，仅在合法授权范围内用于 IP 与资产管理，并在生产环境使用前做好数据备份。"
+        "第三方基于本项目的修改、再分发或商业化行为与本项目作者无关。"
+    ),
+}
+# 包内默认品牌文件（由打包者填写），作为初始值
+try:
+    with open(sys.argv[2], "r", encoding="utf-8") as f:
+        default = json.load(f)
+    if isinstance(default, dict):
+        for key in data:
+            if isinstance(default.get(key), str) and default[key].strip():
+                data[key] = default[key].strip()[:MAXLEN]
+except (OSError, ValueError, IndexError):
+    pass
+# 安装向导的值优先；留空时保留包内默认值，不覆盖为空白
+mapping = {
+    "app_name": "wizard_app_name", "owner_name": "wizard_owner_name",
+    "contact_email": "wizard_contact_email", "contact": "wizard_contact",
+    "source_url": "wizard_source_url",
+}
+for key, envname in mapping.items():
+    val = os.environ.get(envname, "").strip()
+    if val:
+        data[key] = val[:MAXLEN]
+data["app_name"] = data.get("app_name", "").strip() or "IP 地址管理"
+if not data.get("copyright"):
+    data["copyright"] = "\u00a9 %d %s" % (datetime.now().year, data["owner_name"].strip() or "梦非常浪漫")
+tmp = path + ".tmp"
+with open(tmp, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
+os.replace(tmp, path)
+print("IPAM: branding saved")
+PYEOF
+[ $? -eq 0 ] || fail "写入品牌配置失败。"
+
+# 2) 初始化数据库与管理员（密码经 stdin 传入，不写入任何配置文件）
+if [ -n "${wizard_password:-}" ]; then
+    printf '%s' "$wizard_password" | \
+        IPAM_APPDEST="$APPDEST" TRIM_PKGVAR="$PKGVAR" TRIM_PKGETC="$PKGETC" \
+        "$PY" "$SERVER" --init --admin "${wizard_admin:-admin}" --password-stdin \
+        >> "$PKGVAR/install.log" 2>&1
+    [ $? -eq 0 ] || fail "初始化管理员失败，请查看 $PKGVAR/install.log"
+else
+    IPAM_APPDEST="$APPDEST" TRIM_PKGVAR="$PKGVAR" TRIM_PKGETC="$PKGETC" \
+        "$PY" -c "import sys; sys.path.insert(0,'$APPDEST/server'); from core import Config, init_db; init_db(Config())" \
+        >> "$PKGVAR/install.log" 2>&1
+fi
+
+echo "IPAM: 安装完成" >> "$PKGVAR/install.log"
+exit 0

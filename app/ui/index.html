@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IP 地址管理</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="images/icon_64.png">
+</head>
+<body>
+
+<div id="loginScreen" class="login-screen" hidden>
+  <div class="login-card">
+    <img class="login-mark" src="images/icon_64.png" alt="IPAM Logo">
+    <h1 id="loginTitle">IP 地址管理</h1>
+    <p class="login-sub">本地部署 · 数据保存在 NAS · 请登录后使用</p>
+    <form id="loginForm" autocomplete="off">
+      <label>账号<input type="text" id="loginUser" required autocomplete="username" placeholder="请输入账号"></label>
+      <label>密码<input type="password" id="loginPass" required autocomplete="current-password" placeholder="请输入密码"></label>
+      <p class="login-error" id="loginError" hidden></p>
+      <button type="submit" class="btn btn-primary btn-block">登录</button>
+    </form>
+    <p class="login-foot" id="loginFoot"></p>
+    <p class="login-foot" id="loginCopyright"></p>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <img class="brand-mark" src="images/icon_64.png" alt="IPAM Logo">
+      <div class="brand-text"><strong id="brandName">IP 地址管理</strong><small>IP AM</small></div>
+    </div>
+    <nav id="nav"></nav>
+    <div class="sidebar-foot">
+      <span id="sideUser">—</span>
+      <button class="link-btn" id="btnLogout">退出</button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="menu-toggle" id="menuToggle" aria-label="菜单">☰</button>
+      <h2 id="pageTitle">仪表盘</h2>
+      <div class="topbar-right">
+        <input type="search" id="globalSearch" class="global-search" placeholder="搜索 IP / 设备 / MAC…" autocomplete="off">
+        <button class="icon-btn" id="btnTheme" title="切换主题">◐</button>
+        <span class="top-user" id="topUser">—</span>
+      </div>
+    </header>
+    <main id="view" class="view"></main>
+  </div>
+</div>
+
+<div id="modalOverlay" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head"><h3 id="modalTitle">标题</h3><button class="icon-btn" id="modalClose" aria-label="关闭">×</button></div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-foot" id="modalFoot"></div>
+  </div>
+</div>
+
+<div id="toasts" class="toasts"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

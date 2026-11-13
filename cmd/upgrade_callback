@@ -1,0 +1,29 @@
+#!/bin/bash
+# 升级后：补齐新增表/索引（幂等，不覆盖已有数据），刷新配置，重启服务
+set -u
+LOG_FILE="${TRIM_TEMP_LOGFILE:-/dev/null}"
+APPDEST="${TRIM_APPDEST:-/var/apps/IPAM/target}"
+PKGVAR="${TRIM_PKGVAR:-/var/apps/IPAM/var}"
+
+fail() {
+    echo "IPAM: $1" > "$LOG_FILE"
+    echo "IPAM: $1" >&2
+    exit 1
+}
+
+PY=""
+for p in /var/apps/python312/target/bin/python3 /usr/bin/python3 /usr/local/bin/python3; do
+    if [ -x "$p" ]; then PY="$p"; break; fi
+done
+[ -n "$PY" ] || PY=$(command -v python3 2>/dev/null || true)
+[ -n "$PY" ] || fail "未找到 Python 3 运行环境。"
+
+IPAM_APPDEST="$APPDEST" TRIM_PKGVAR="$PKGVAR" \
+    "$PY" -c "import sys; sys.path.insert(0,'$APPDEST/server'); from core import Config, init_db; init_db(Config())" \
+    >> "$PKGVAR/upgrade.log" 2>&1 || fail "数据库结构升级失败，请查看 $PKGVAR/upgrade.log"
+
+# 向导可能更新了品牌信息
+if [ -n "${wizard_owner_name+x}" ] || [ -n "${wizard_app_name+x}" ]; then
+    bash "$APPDEST/cmd/config_callback" || true
+fi
+exit 0

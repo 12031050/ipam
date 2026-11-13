@@ -1,0 +1,7 @@
+{
+  "defaults": {
+    "run-as": "package"
+  },
+  "username": "ipam_user",
+  "groupname": "ipam_user"
+}

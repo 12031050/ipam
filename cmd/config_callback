@@ -1,0 +1,70 @@
+#!/bin/bash
+# 配置变更后：刷新品牌/联系信息并重启服务使配置生效
+set -u
+LOG_FILE="${TRIM_TEMP_LOGFILE:-/dev/null}"
+APPDEST="${TRIM_APPDEST:-/var/apps/IPAM/target}"
+PKGETC="${TRIM_PKGETC:-/var/apps/IPAM/etc}"
+PKGVAR="${TRIM_PKGVAR:-/var/apps/IPAM/var}"
+
+PY=""
+for p in /var/apps/python312/target/bin/python3 /usr/bin/python3 /usr/local/bin/python3; do
+    if [ -x "$p" ]; then PY="$p"; break; fi
+done
+[ -n "$PY" ] || PY=$(command -v python3 2>/dev/null || true)
+[ -n "$PY" ] || { echo "IPAM: 未找到 Python 3" > "$LOG_FILE"; exit 1; }
+
+mkdir -p "$PKGETC"
+
+# 只覆盖向导明确提供的非空字段，保留其它已有值
+"$PY" - "$PKGETC/branding.json" "$APPDEST/branding.json" <<'PYEOF'
+import json, os, sys
+from datetime import datetime
+path = sys.argv[1]
+MAXLEN = 1000
+data = {
+    "app_name": "IP 地址管理", "owner_name": "梦非常浪漫",
+    "contact_email": "12031050@qq.com", "contact": "QQ群：416290431",
+    "website": "", "source_url": "https://github.com/12031050/ipam.git",
+    "copyright": "",
+    "disclaimer": (
+        "本软件为开源项目，按「现状」（AS IS）提供，作者及贡献者不提供任何明示或暗示的担保，"
+        "包括但不限于对适销性、特定用途适用性与非侵权性的担保。在任何情况下，作者与贡献者均不对"
+        "因使用本软件或与之相关的任何直接、间接、偶然、特殊、惩罚性或后果性损害（包括但不限于"
+        "数据丢失、业务中断、利润损失）承担责任，即使已被告知此类损害的可能性。使用者须自行评估"
+        "并承担使用风险，仅在合法授权范围内用于 IP 与资产管理，并在生产环境使用前做好数据备份。"
+        "第三方基于本项目的修改、再分发或商业化行为与本项目作者无关。"
+    ),
+}
+# 依次读取包内默认值与用户已保存的配置
+for source in (sys.argv[2] if len(sys.argv) > 2 else "", path):
+    try:
+        with open(source, "r", encoding="utf-8") as f:
+            saved = json.load(f)
+        if isinstance(saved, dict):
+            data.update({k: v.strip()[:MAXLEN] for k, v in saved.items()
+                         if k in data and isinstance(v, str) and v.strip()})
+    except (OSError, ValueError):
+        pass
+mapping = {
+    "app_name": "wizard_app_name", "owner_name": "wizard_owner_name",
+    "contact_email": "wizard_contact_email", "contact": "wizard_contact",
+    "source_url": "wizard_source_url",
+}
+for key, envname in mapping.items():
+    val = os.environ.get(envname, "").strip()
+    if val:
+        data[key] = val[:MAXLEN]
+data["app_name"] = data.get("app_name", "").strip() or "IP 地址管理"
+if not data.get("copyright"):
+    data["copyright"] = "\u00a9 %d %s" % (datetime.now().year, data["owner_name"].strip() or "梦非常浪漫")
+tmp = path + ".tmp"
+with open(tmp, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
+os.replace(tmp, path)
+print("IPAM: branding updated")
+PYEOF
+
+bash "$APPDEST/cmd/main" stop >/dev/null 2>&1 || true
+bash "$APPDEST/cmd/main" start >/dev/null 2>&1 || true
+echo "IPAM: 配置已应用" > "$LOG_FILE"
+exit 0

@@ -1,0 +1,18 @@
+#!/bin/bash
+# 卸载后：按卸载向导选择决定是否清除应用数据（默认保留）
+set -u
+PKGVAR="${TRIM_PKGVAR:-/var/apps/IPAM/var}"
+PKGETC="${TRIM_PKGETC:-/var/apps/IPAM/etc}"
+LOG_FILE="${TRIM_TEMP_LOGFILE:-/dev/null}"
+
+if [ "${wizard_keep_data:-keep}" = "delete" ]; then
+    # 仅限本应用自己的数据目录，逐项删除，不触碰任何用户目录
+    rm -f "$PKGVAR/ipam.db" "$PKGVAR/ipam.db-wal" "$PKGVAR/ipam.db-shm" \
+          "$PKGVAR/ipam.pid" "$PKGVAR/ipam.log" "$PKGVAR/install.log" "$PKGVAR/upgrade.log"
+    rm -rf "$PKGVAR/backups" "$PKGVAR/exports"
+    rm -f "$PKGETC/branding.json"
+    echo "IPAM: 已按向导选择清除应用数据" > "$LOG_FILE"
+else
+    echo "IPAM: 应用数据已保留" > "$LOG_FILE"
+fi
+exit 0

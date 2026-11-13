@@ -1,0 +1,25 @@
+#!/bin/bash
+# 安装前检查：Python 运行环境与服务文件
+set -u
+LOG_FILE="${TRIM_TEMP_LOGFILE:-/dev/null}"
+APPDEST="${TRIM_APPDEST:-/var/apps/IPAM/target}"
+
+fail() {
+    echo "IPAM: $1" > "$LOG_FILE"
+    echo "IPAM: $1" >&2
+    exit 1
+}
+
+PY=""
+for p in /var/apps/python312/target/bin/python3 /usr/bin/python3 /usr/local/bin/python3; do
+    if [ -x "$p" ]; then PY="$p"; break; fi
+done
+[ -n "$PY" ] || PY=$(command -v python3 2>/dev/null || true)
+[ -n "$PY" ] || fail "未找到 Python 3 运行环境，无法安装本应用。"
+
+"$PY" -c "import sys; sys.exit(0 if sys.version_info >= (3,8) else 1)" \
+    || fail "Python 版本过低，需要 3.8 或更高版本。"
+
+# 安装文件尚未落盘，此处只做运行环境检查
+echo "IPAM: 安装前检查通过 ($PY)" >&2
+exit 0
