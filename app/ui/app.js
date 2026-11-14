@@ -473,7 +473,10 @@ async function renderCrud(key) {
     html += '<select data-filter="' + attr(f.k) + '"><option value="">' + esc(f.t) + '：全部</option>' +
       opts(typeof f.options === 'function' ? f.options() : f.options, S.filters[f.k] || '', undefined) + '</select>';
   });
-  html += '<button class="btn btn-sm" id="btnRefresh">刷新</button><span class="grow"></span>';
+  html += '<button class="btn btn-sm" id="btnRefresh">刷新</button>';
+  /* 修改密码已从「系统设置」迁移到「用户管理」，与账号相关操作统一入口 */
+  if (key === 'users') html += '<button class="btn btn-sm" id="btnMyPass">修改我的密码</button>';
+  html += '<span class="grow"></span>';
   if (canWrite) html += '<button class="btn btn-primary btn-sm" id="btnAdd">+ 新增' + esc(cfg.name) + '</button>';
   html += '</div>';
 
@@ -520,6 +523,7 @@ async function renderCrud(key) {
 
   $('#listSearch').addEventListener('change', e => { S.q = e.target.value.trim(); S.page = 1; renderCrud(key); });
   $('#btnRefresh').onclick = () => renderCrud(key);
+  if ($('#btnMyPass')) $('#btnMyPass').onclick = openChangePassword;
   $$('[data-filter]').forEach(el => el.onchange = () => {
     S.filters[el.dataset.filter] = el.value; S.page = 1; renderCrud(key);
   });
@@ -859,17 +863,40 @@ async function renderAudit() {
   });
 }
 
+/* 修改当前登录账号密码：入口已从「系统设置」移到「用户管理」 */
+function openChangePassword() {
+  const u = (S.user && S.user.username) || '';
+  modal('修改我的登录密码' + (u ? ' · ' + u : ''),
+    '<div class="form-grid">' +
+      '<div class="full"><label for="oldPass">原密码</label>' +
+      '<input type="password" id="oldPass" autocomplete="current-password" placeholder="当前登录密码"></div>' +
+      '<div class="full"><label for="newPass">新密码</label>' +
+      '<input type="password" id="newPass" autocomplete="new-password" placeholder="至少 6 位"></div>' +
+      '<div class="full"><label for="newPass2">确认新密码</label>' +
+      '<input type="password" id="newPass2" autocomplete="new-password" placeholder="再次输入新密码"></div>' +
+    '</div>',
+    '<button class="btn" data-close>取消</button><button class="btn btn-primary" id="savePass">确认修改</button>');
+  $('#savePass').onclick = async () => {
+    const oldPass = $('#oldPass').value, newPass = $('#newPass').value, newPass2 = $('#newPass2').value;
+    if (!oldPass || !newPass) return toast('请填写原密码与新密码', 'err');
+    if (newPass.length < 6) return toast('新密码至少 6 位', 'err');
+    if (newPass !== newPass2) return toast('两次输入的新密码不一致', 'err');
+    try {
+      await api('POST', 'change_password', { old_password: oldPass, new_password: newPass });
+      closeModal(); toast('密码已修改，下次登录请使用新密码');
+    } catch (e) { toast(e.message, 'err'); }
+  };
+}
+
 async function renderSettings() {
   let info;
   try { info = await api('GET', 'settings/info'); } catch (e) { return toast(e.message, 'err'); }
   /* 系统名称 / 界面模式 / 版权与联系信息不在本页展示，也不提供修改入口：
-     统一由安装向导、配置向导与 branding.json 管理。 */
+     统一由安装向导、配置向导与 branding.json 管理。
+     修改登录密码已迁至「用户管理」，与账号相关操作合并为统一入口。 */
   let html = '';
   html += '<div class="card"><div class="card-title">字段显示名称</div><p class="muted small">自定义列表与表单中字段的显示文字。</p><div id="labelRows"></div>' +
     '<div style="margin-top:12px"><button class="btn btn-primary" id="saveLabels">保存字段名称</button></div></div>';
-  html += '<div class="card"><div class="card-title">修改登录密码</div><div class="toolbar">' +
-    '<input type="password" id="oldPass" placeholder="原密码"><input type="password" id="newPass" placeholder="新密码（至少 6 位）">' +
-    '<button class="btn btn-primary" id="savePass">修改</button></div></div>';
   $('#view').innerHTML = html;
 
   const defaults = { ip_address: 'IP 地址', port: '端口', device_name: '设备名称', device_type: '设备类型',
@@ -885,20 +912,15 @@ async function renderSettings() {
     try { await api('POST', 'settings/field_labels', { field_labels: obj }); toast('已保存'); }
     catch (e) { toast(e.message, 'err'); }
   };
-  $('#savePass').onclick = async () => {
-    try { await api('POST', 'change_password', { old_password: $('#oldPass').value, new_password: $('#newPass').value });
-      $('#oldPass').value = ''; $('#newPass').value = ''; toast('密码已修改');
-    } catch (e) { toast(e.message, 'err'); }
-  };
 }
 
 async function renderAbout() {
   let sys;
-  try { sys = await api('GET', 'system/stats'); } catch (e) { sys = { version: S.session.version, python: '-', tables: {}, db_size_text: '-' }; }
+  try { sys = await api('GET', 'system/stats'); } catch (e) { sys = { version: S.session.version }; }
   const b = S.branding || {};
   const rows = [
-    ['应用名称', S.appName], ['版本', sys.version || S.session.version], ['运行环境', 'Python ' + (sys.python || '-')],
-    ['数据存储', '本地 SQLite · ' + (sys.db_size_text || '-')], ['作者 / 维护者', b.owner_name || '梦非常浪漫'],
+    ['应用名称', S.appName], ['版本', sys.version || S.session.version],
+    ['作者 / 维护者', b.owner_name || '梦非常浪漫'],
     ['联系邮箱', b.contact_email || '12031050@qq.com'], ['QQ群 / 其他联系方式', b.contact || 'QQ群：416290431'],
     ['版权声明', b.copyright || '© 2026 梦非常浪漫'],
     ['开源地址', b.source_url || SOURCE_DEFAULT], ['运行平台', '飞牛 fnOS 应用'],

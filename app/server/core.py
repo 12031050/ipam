@@ -13,7 +13,7 @@ import uuid
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 
-APP_VERSION = "1.0.4"
+APP_VERSION = "1.0.5"
 PBKDF2_ROUNDS = 200000
 SESSION_DAYS = 7
 DEFAULT_PORT = 8765

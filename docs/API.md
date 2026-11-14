@@ -1,7 +1,7 @@
 # REST API 参考
 
 > 配套文档：[README.md](../README.md) · [DEVELOPMENT.md](DEVELOPMENT.md)
-> 适用性：IPAM 1.0.4
+> 适用性：IPAM 1.0.5
 
 ---
 

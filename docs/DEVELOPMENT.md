@@ -118,7 +118,7 @@ SQLite（19 张表，WAL）
 | 字段 | 当前值 | 说明 |
 | --- | --- | --- |
 | `appname` | `IPAM` | 安装目录名 `/var/apps/IPAM`，不可随意改 |
-| `version` | `1.0.4` | 与 `APP_VERSION` 同步 |
+| `version` | `1.0.5` | 与 `APP_VERSION` 同步 |
 | `display_name` | `IP 地址管理` | 桌面显示名 |
 | `source` | `thirdparty` | 第三方应用 |
 | `platform` / `os_min_version` | `all` / `1.2.0` | 平台与最低系统版本 |
@@ -214,7 +214,7 @@ SQLite 单文件 `ipam.db`，WAL 模式，19 张表：
 
 ```bash
 python build_fpk.py                       # 按 manifest.version 生成 IPAM-<version>.fpk
-python build_fpk.py --version 1.0.4       # 指定版本并同步写回 manifest
+python build_fpk.py --version 1.0.5       # 指定版本并同步写回 manifest
 python build_fpk.py --check               # 仅校验已有 fpk 结构
 python build_fpk.py --file xxx.fpk --check
 python build_fpk.py --refresh-icons       # 重建四张图标（需 magick）
@@ -233,7 +233,7 @@ IPAM-<version>.fpk
 └── ui/config               桌面入口
 ```
 
-打包器会：规范化脚本换行与权限、把 `branding.json` 的署名同步到 `manifest`、把品牌文件同时打进外层与 `app.tgz`、校验图标尺寸与体积，最后逐项检查包结构。1.0.4 包为外层 31 项、`app.tgz` 内 15 项。
+打包器会：规范化脚本换行与权限、把 `branding.json` 的署名同步到 `manifest`、把品牌文件同时打进外层与 `app.tgz`、校验图标尺寸与体积，最后逐项检查包结构。1.0.5 包为外层 31 项、`app.tgz` 内 15 项。
 
 > 若飞牛应用中心对包校验报错，可在设备上了用官方工具重打包：`fnpack build -d <源码目录>`。
 

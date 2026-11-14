@@ -175,6 +175,9 @@ def apply_branding_to_manifest(branding):
     text = (ROOT / "manifest").read_text(encoding="utf-8")
     text = re.sub(r"^maintainer=.*$", "maintainer=" + (owner or "梦非常浪漫"), text, flags=re.M)
     text = re.sub(r"^maintainer_url=.*$", "maintainer_url=" + (website or source_url), text, flags=re.M)
+    # 发布者（distributor）与开发者分开显示，留空会让应用中心显示为「-」，因此同步填入
+    text = re.sub(r"^distributor=.*$", "distributor=" + (owner or "梦非常浪漫"), text, flags=re.M)
+    text = re.sub(r"^distributor_url=.*$", "distributor_url=" + (website or source_url), text, flags=re.M)
     text = re.sub(r"^display_name=.*$", "display_name=" + app_name, text, flags=re.M)
     (ROOT / "manifest").write_bytes(text.encode("utf-8"))
     return text
