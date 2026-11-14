@@ -1,7 +1,7 @@
 # REST API 参考
 
 > 配套文档：[README.md](../README.md) · [DEVELOPMENT.md](DEVELOPMENT.md)
-> 适用性：IPAM 1.0.3
+> 适用性：IPAM 1.0.4
 
 ---
 
@@ -118,12 +118,34 @@ IP 列表返回结构：
 | GET | `/api/records/{row_id}` | 单条详情（含标签、绑定资产） |
 | PUT | `/api/records/{row_id}` | 修改记录 |
 | DELETE | `/api/records/{row_id}` | 删除记录 |
-| POST | `/api/records/probe` | 在线探测（批量检测 IP 可达性） |
+| POST | `/api/records/probe` | 在线探测（ICMP + 多端口 TCP 双策略，见 4.2.1） |
 | POST | `/api/records/batch_{action}` | 批量操作，见下表 |
 
 `batch_{action}` 可选值：`delete`（删除）、`recycle`（回收）、`reserve`（预留）、`status`（改状态）、`organization`（改单位）、`owner`（改负责人）、`bind_tags`（绑定标签）。
 
-记录主要字段：`ip_address`、`port`、`subnet_id`、`org_id`、`department_id`、`status`、`device_name`、`device_type`、`mac_address`、`owner`、`business_system`、`remark`、`is_online`、`tags[]`。同一单位下 `(ip_address, port, org_id)` 唯一。
+记录主要字段：`ip_address`、`port`、`subnet_id`、`org_id`、`department_id`、`status`、`device_name`、`device_type`、`mac_address`、`owner`、`business_system`、`remark`、`is_online`、`last_scan_time`、`tags[]`。同一单位下 `(ip_address, port, org_id)` 唯一。
+
+#### 4.2.1 在线探测（1.0.4 重写）
+
+`POST /api/records/probe`（仅管理员），请求体 `{"ids": ["<id1>", "<id2>"]}`，单次最多 100 条。
+
+判定策略：
+
+1. 先用系统 `ping` 发一个 ICMP Echo（Linux `-n -c 1 -W 1`，Windows `-n 1 -w 1000`），有响应即判在线。
+2. 无响应时并发探测 15 个常见端口（记录自身 `port` 优先，其后 `80/443/22/3389/445/8080/8443/139/135/21/23/53/5900/9100/8291`），任一连通判在线。
+3. 每次探测先检查控制组 `192.0.2.1`（RFC 5737 保留地址）：若它也能建立 TCP 连接，说明网络存在透明代理 / 通配路由，本次自动禁用 TCP 兜底，只以 ICMP 为准，避免把不存在的 IP 全部判成在线。
+
+> 1.0.3 及以前只连记录端口（默认 80）一次；PC / 终端不监听 80 且系统防火墙拒绝入站时，能 ping 通的在线设备会被误判为离线。1.0.4 已修复。
+
+响应字段：`probed` / `online` / `offline` / `detail`（含判定方式统计）/ `scan_time` / `icmp_available` / `tcp_trustworthy` / `tcp_ports` / `items[]`（逐条 `id`、`ip_address`、`is_online`、`via`）。结果写入 `ip_records.is_online` 与 `last_scan_time`；列表 `online_text` 三态为 `未探测` / `在线` / `离线`。
+
+环境要求：系统需有 `ping` 命令且网络放行 ICMP；无 `ping` 时退化为纯 TCP 端口探测（`icmp_available=false`）。跨网段需保证 NAS 到目标路由可达。
+
+```bash
+curl -s -X POST -H "$CK" -H 'Content-Type: application/json' \
+  -d '{"ids":["<id1>","<id2>"]}' \
+  $BASE/records/probe
+```
 
 ### 4.3 子网 / VLAN / 地址池
 

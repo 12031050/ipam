@@ -118,7 +118,7 @@ SQLite（19 张表，WAL）
 | 字段 | 当前值 | 说明 |
 | --- | --- | --- |
 | `appname` | `IPAM` | 安装目录名 `/var/apps/IPAM`，不可随意改 |
-| `version` | `1.0.3` | 与 `APP_VERSION` 同步 |
+| `version` | `1.0.4` | 与 `APP_VERSION` 同步 |
 | `display_name` | `IP 地址管理` | 桌面显示名 |
 | `source` | `thirdparty` | 第三方应用 |
 | `platform` / `os_min_version` | `all` / `1.2.0` | 平台与最低系统版本 |
@@ -233,7 +233,7 @@ IPAM-<version>.fpk
 └── ui/config               桌面入口
 ```
 
-打包器会：规范化脚本换行与权限、把 `branding.json` 的署名同步到 `manifest`、把品牌文件同时打进外层与 `app.tgz`、校验图标尺寸与体积，最后逐项检查包结构。当前 1.0.3 包为外层 31 项、`app.tgz` 内 15 项。
+打包器会：规范化脚本换行与权限、把 `branding.json` 的署名同步到 `manifest`、把品牌文件同时打进外层与 `app.tgz`、校验图标尺寸与体积，最后逐项检查包结构。1.0.4 包为外层 31 项、`app.tgz` 内 15 项。
 
 > 若飞牛应用中心对包校验报错，可在设备上了用官方工具重打包：`fnpack build -d <源码目录>`。
 
@@ -258,17 +258,25 @@ python -c "import json,glob; [json.load(open(p,encoding='utf-8')) for p in
 python build_fpk.py --check
 ```
 
-已验证过的范围（1.0.3）：
+### 在线探测实现要点（1.0.4）
+
+`app/server/api_ops.py` 中 `probe_host()` 是纯函数，可单独 import 做回归测试；`probe_records()` 负责并发调度、控制组校验与 SQLite 写回。ICMP 通过 `subprocess.run` 以参数列表调用系统 `ping`，IP 先经 `valid_ip()` 严格校验且不经过 shell；线程池只做网络探测，数据库连接不跨线程。判定策略与响应字段见 [API.md](API.md#421-在线探测104-重写)。
+
+已验证过的范围（截至 1.0.4）：
 
 | 验证 | 结果 |
 | --- | --- |
 | 后端接口冒烟（1.0.0 起） | 50 项通过 |
-| 静态资源 / 网关前缀 / 登录态 / 目录穿越 | 15 项通过 |
-| 模拟 fnOS 安装生命周期 | `install_init → install_callback → main start → HTTP → stop`，退出码正确 |
-| 1.0.3 端到端接口与静态资源 | 14 项通过 |
-| 链接渲染 XSS 断言 | 5 项通过 |
+| 静态资源 / 网关前缀 / 登录态 / 目录穿越（1.0.0 起） | 15 项通过 |
+| 模拟 fnOS 安装生命周期（1.0.0 ~ 1.0.3） | `install_init → install_callback → main start → HTTP → stop`，退出码正确 |
+| 1.0.3 端到端接口与静态资源（历史） | 14 项通过 |
+| 链接渲染 XSS 断言（1.0.3） | 5 项通过 |
 | FPK 包内一致性 | 17 项通过 |
-| 桌面浏览器渲染 | headless Chrome 截图目视通过 |
+| 桌面浏览器渲染（1.0.3） | headless Chrome 截图目视通过 |
+| 1.0.4 探测引擎回归：ICMP 判活 / 不可达判离线 / 注入输入拒绝 / 透明代理控制组 / TCP 兜底 / 耗时 | 10 项通过 |
+| 1.0.4 语法与包结构 | Python / JS / Bash / JSON 通过，`build_fpk.py --check` 通过 |
+
+> 1.0.4 未重新执行「模拟 fnOS 安装生命周期」（本机环境安全审批拦截该命令）。探测逻辑由独立回归测试覆盖，包内源码内容由静态校验覆盖；**真实飞牛设备上的安装验证仍待完成**。
 
 模拟安装的关键点：把 `app/`、`cmd/`、`branding.json` 复制到一个临时 `target/`，设置 `TRIM_APPDEST` / `TRIM_PKGVAR` / `TRIM_PKGETC` / `TRIM_SERVICE_PORT` 后依次调用脚本。**`TRIM_APPDEST` 必须用绝对路径**（`cmd/main` 会 `cd` 切换工作目录）。
 

@@ -506,7 +506,8 @@ def record_select(conn, where="", args=(), order="r.created_at DESC", limit=None
     items = rows_to_dicts(rows)
     for it in items:
         it["status_text"] = STATUS_LABELS.get(it["status"], it["status"])
-        it["online_text"] = "在线" if it["is_online"] else "离线"
+        it["online_text"] = ("在线" if it["is_online"]
+                             else ("离线" if it.get("last_scan_time") else "未探测"))
         it["endpoint_display"] = it["ip_address"] + (":%d" % it["port"] if it["port"] else "")
     return items
 

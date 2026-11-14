@@ -14,21 +14,21 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 当前版本 | **1.0.3** |
-| 安装包 | **`IPAM-1.0.3.fpk`** |
-| 文件大小 | 236.5 KB（242,132 字节） |
-| SHA-256 | `b4eea959899cdbadc476bd51b376d7dfab7cfcc4d47c5163e1321cfabdfe4e57` |
+| 当前版本 | **1.0.4** |
+| 安装包 | **`IPAM-1.0.4.fpk`** |
+| 文件大小 | 238.1 KB（243,797 字节） |
+| SHA-256 | `d39518b9f3ee896eb5f2a9b48f436b597f1b6bc00fd64c4a889eaafe23a6bb96` |
 | 适用平台 | 飞牛 fnOS ≥ 1.2.0（all 架构），需系统 Python 3.8+ |
 | 服务端口 | `8765` |
 
 **直接下载地址（推荐，点击即可下载）：**
 
-> ### 👉 https://raw.githubusercontent.com/12031050/ipam/main/IPAM-1.0.3.fpk
+> ### 👉 https://raw.githubusercontent.com/12031050/ipam/main/IPAM-1.0.4.fpk
 
 其他入口：
 
-- [仓库内安装包文件](IPAM-1.0.3.fpk)（在 GitHub 文件列表中打开后点 `Download raw file`）
-- [Tags / Releases](https://github.com/12031050/ipam/releases)：已推送 `v1.0.3` 标签，后续版本将在此发布
+- [仓库内安装包文件](IPAM-1.0.4.fpk)（在 GitHub 文件列表中打开后点 `Download raw file`）
+- [Tags / Releases](https://github.com/12031050/ipam/releases)：已推送 `v1.0.4` 标签，后续版本将在此发布
 - 历史版本与变更说明见 [CHANGELOG.md](CHANGELOG.md)
 
 获取源码：
@@ -41,8 +41,8 @@ cd ipam
 下载后可校验完整性（在飞牛 SSH 终端或本机执行）：
 
 ```bash
-sha256sum IPAM-1.0.3.fpk
-# 期望输出：b4eea959899cdbadc476bd51b376d7dfab7cfcc4d47c5163e1321cfabdfe4e57
+sha256sum IPAM-1.0.4.fpk
+# 期望输出：d39518b9f3ee896eb5f2a9b48f436b597f1b6bc00fd64c4a889eaafe23a6bb96
 ```
 
 ---
@@ -80,7 +80,7 @@ IPAM 是一套运行在**飞牛 fnOS（NAS）**上的 IP 地址与资产台账�
 
 ## 安装到飞牛 fnOS
 
-1. 从上面的地址下载 `IPAM-1.0.3.fpk`。
+1. 从上面的地址下载 `IPAM-1.0.4.fpk`。
 2. 打开飞牛桌面 **应用中心 → 手动安装（或「安装第三方应用」）**，上传该 `.fpk`。
 3. 按安装向导设置**管理员账号与初始密码**；作者、邮箱、QQ群、开源地址已预填，可保持默认。
 4. 安装完成后，点击桌面图标，或浏览器访问 `http://<NAS_IP>:8765`，用第 3 步的账号登录。
@@ -135,7 +135,7 @@ IPAM/
 ├── branding.json                品牌信息（作者 / 邮箱 / QQ群 / 开源地址 / 免责声明）
 ├── build_fpk.py                  纯 Python 打包器（生成 .fpk）
 ├── ICON.PNG / ICON_256.PNG       应用图标 64 / 256
-├── IPAM-1.0.3.fpk               ← 可直接安装的成品包
+├── IPAM-1.0.4.fpk               ← 可直接安装的成品包
 ├── assets/ipamlogo.png           Logo 源图（透明底 RGBA）
 ├── app/
 │   ├── ui/                       index.html / app.js / style.css / config / images/
@@ -163,7 +163,7 @@ IPAM/
 ```bash
 python build_fpk.py              # 生成 IPAM-<version>.fpk
 python build_fpk.py --check      # 校验已有安装包结构
-python build_fpk.py --version 1.0.4   # 指定版本号并同步 manifest
+python build_fpk.py --version 1.0.5   # 指定版本号并同步 manifest
 ```
 
 ---

@@ -175,7 +175,7 @@ def run_server(cfg):
         srv = ThreadingUnixServer(cfg.socket_path, handler)
         os.chmod(cfg.socket_path, 0o660)
         print("IPAM %s listening on unix socket %s (base=%s)" % (
-            os.environ.get("IPAM_VERSION", "1.0.3"), cfg.socket_path, base or "/"), flush=True)
+            os.environ.get("IPAM_VERSION", "1.0.4"), cfg.socket_path, base or "/"), flush=True)
     else:
         srv = ThreadingTCPServer((cfg.host, cfg.port), handler)
         print("IPAM listening on http://%s:%s (base=%s)" % (cfg.host, cfg.port, base or "/"), flush=True)

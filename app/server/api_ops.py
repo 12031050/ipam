@@ -8,8 +8,11 @@ import json
 import os
 import platform
 import re
+import shutil
 import socket
 import sqlite3
+import subprocess
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
 from core import (
@@ -111,23 +114,137 @@ def batch_records(req, conn, action):
     return {"affected": affected, "detail": detail}
 
 
+# ---------------- 在线探测 ----------------
+# 旧实现只用 TCP 连接记录端口（默认 80）判断存活：PC / 终端既不监听 80，
+# 系统防火墙又默认拒绝入站连接，导致能 ping 通的在线设备被误判为离线。
+# 现改为「ICMP Echo 优先 + 多常见端口 TCP 兜底」双策略，并并发执行。
+PROBE_TCP_PORTS = (80, 443, 22, 3389, 445, 8080, 8443, 139, 135, 21, 23, 53, 5900, 9100, 8291)
+PROBE_PING_MS = 1000
+PROBE_TCP_TIMEOUT = 0.35
+PROBE_WORKERS = 16
+# RFC 5737 文档专用地址，公网保证不可路由；用于检测透明代理 / 通配路由
+PROBE_CONTROL_IP = "192.0.2.1"
+
+
+def _ping_command(ip, timeout_ms):
+    system = platform.system()
+    if system == "Windows":
+        return ["ping", "-n", "1", "-w", str(int(timeout_ms)), ip]
+    if system == "Darwin":
+        return ["ping", "-c", "1", "-W", str(int(timeout_ms)), ip]
+    # Linux / fnOS：-W 单位为秒，-n 跳过反向 DNS 解析
+    return ["ping", "-n", "-c", "1", "-W", str(max(1, int(timeout_ms / 1000))), ip]
+
+
+def _icmp_alive(ip):
+    """调用系统 ping 判断主机是否响应 ICMP Echo；系统无 ping 时返回 False。"""
+    if not shutil.which("ping"):
+        return False, "no-ping"
+    kwargs = {}
+    if platform.system() == "Windows":
+        kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+    try:
+        proc = subprocess.run(
+            _ping_command(ip, PROBE_PING_MS),
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            timeout=PROBE_PING_MS / 1000.0 + 2.0, check=False, **kwargs)
+        return (proc.returncode == 0), ("ICMP" if proc.returncode == 0 else "")
+    except (OSError, subprocess.SubprocessError):
+        return False, ""
+
+
+def _tcp_alive(ip, ports):
+    """并发尝试常见端口，任一连通即判在线（覆盖禁 ping 但开放服务的设备）。"""
+    def one(port):
+        try:
+            with socket.create_connection((ip, port), timeout=PROBE_TCP_TIMEOUT):
+                return port
+        except (OSError, ValueError):
+            return None
+
+    with ThreadPoolExecutor(max_workers=min(len(ports), PROBE_WORKERS)) as pool:
+        futures = [pool.submit(one, p) for p in ports]
+        for fut in as_completed(futures):
+            port = fut.result()
+            if port:
+                return True, "TCP:%d" % port
+    return False, ""
+
+
+def tcp_trustworthy():
+    """控制组：若连一个公网保证不可达的地址都能建立 TCP 连接，
+    说明网络存在透明代理 / 通配路由，此时 TCP 结果不可作为在线依据。"""
+    reachable, _ = _tcp_alive(PROBE_CONTROL_IP, PROBE_TCP_PORTS)
+    return not reachable
+
+
+def probe_host(ip, port=0, tcp_ok=True):
+    """返回 (是否在线, 判定依据)。IP 严格校验后才可进入 subprocess 参数。"""
+    ip = (ip or "").strip()
+    if not valid_ip(ip):
+        return False, "invalid-ip"
+    alive, via = _icmp_alive(ip)
+    if alive:
+        return True, via
+    if not tcp_ok:
+        return False, "-"
+    ports = []
+    try:
+        own = int(port or 0)
+    except (TypeError, ValueError):
+        own = 0
+    if 0 < own < 65536:
+        ports.append(own)
+    ports.extend(p for p in PROBE_TCP_PORTS if p not in ports)
+    alive, via = _tcp_alive(ip, ports)
+    return (True, via) if alive else (False, "-")
+
+
 def probe_records(req, conn):
     ids, _ = _ids(req, 100)
     rows = _visible_records(req, conn, ids)
+    if not rows:
+        raise ApiError("未找到可探测的记录")
+    targets = [(r["id"], (r["ip_address"] or "").strip(), r["port"] or 0) for r in rows]
+    tcp_ok = tcp_trustworthy()
+
+    # 探测放在线程池，SQLite 写回仍在主线程完成（连接不在线程间共享）
+    results = {}
+    with ThreadPoolExecutor(max_workers=min(PROBE_WORKERS, len(targets))) as pool:
+        futures = {pool.submit(probe_host, ip, port, tcp_ok): rid for rid, ip, port in targets}
+        for fut in as_completed(futures):
+            rid = futures[fut]
+            try:
+                results[rid] = fut.result()
+            except Exception:
+                results[rid] = (False, "error")
+
+    scan_time = now()
     online = 0
-    for row in rows:
-        port = int(row["port"] or 0) or 80
-        ok = 0
-        try:
-            with socket.create_connection((row["ip_address"], port), timeout=0.35):
-                ok = 1
-        except Exception:
-            ok = 0
+    methods = {}
+    items = []
+    for rid, ip, port in targets:
+        alive, via = results.get(rid, (False, "error"))
+        alive = bool(alive)
         conn.execute("UPDATE ip_records SET is_online=?,last_scan_time=? WHERE id=?",
-                     (ok, now(), row["id"]))
-        online += ok
-    audit(conn, "在线探测", "", "探测 %d 条，在线 %d 条" % (len(rows), online), req.actor())
-    return {"probed": len(rows), "online": online}
+                     (int(alive), scan_time, rid))
+        online += int(alive)
+        key = via if alive else "offline"
+        methods[key] = methods.get(key, 0) + 1
+        items.append({"id": rid, "ip_address": ip, "is_online": int(alive), "via": via})
+
+    icmp_ok = shutil.which("ping") is not None
+    tcp_hits = sum(v for k, v in methods.items() if k.startswith("TCP:"))
+    detail = ("探测 %d 条：在线 %d 条，离线 %d 条（ICMP %d / TCP %d）"
+              % (len(targets), online, len(targets) - online, methods.get("ICMP", 0), tcp_hits))
+    if not icmp_ok:
+        detail += "；系统无 ping 命令，仅用 TCP 端口探测"
+    if not tcp_ok:
+        detail += "；检测到网络对不可达地址也接受连接，已禁用 TCP 兜底"
+    audit(conn, "在线探测", "", detail, req.actor())
+    return {"probed": len(targets), "online": online, "offline": len(targets) - online,
+            "detail": detail, "scan_time": scan_time, "icmp_available": icmp_ok,
+            "tcp_trustworthy": tcp_ok, "tcp_ports": list(PROBE_TCP_PORTS), "items": items}
 
 
 # ---------------- 子网 / IP 池 ----------------

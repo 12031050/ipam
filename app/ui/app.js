@@ -5,7 +5,7 @@ const S = {
   user: null, appName: 'IP 地址管理', branding: {}, fieldLabels: {},
   statusLabels: {}, assetStatusLabels: {}, options: {}, session: {},
   view: 'dashboard', page: 1, perPage: 30, sort: '', order: 'desc', q: '',
-  filters: {}, selected: new Set(), importData: null, sysStats: null,
+  filters: {}, selected: new Set(), pageIds: [], importData: null, sysStats: null,
 };
 
 const $ = (s, root) => (root || document).querySelector(s);
@@ -200,7 +200,8 @@ $('#btnTheme').onclick = () => {
 };
 $('#menuToggle').onclick = () => $('#sidebar').classList.toggle('open');
 $('#modalClose').onclick = closeModal;
-$('#modalOverlay').addEventListener('click', e => { if (e.target === $('#modalOverlay')) closeModal(); });
+/* 禁止点击遮罩关闭：新增/编辑表单较长，误点对话框外会直接丢失已填内容。
+   关闭只能通过右上角 × 或底部「取消 / 关闭」按钮。 */
 $('#globalSearch').addEventListener('keydown', e => {
   if (e.key === 'Enter') { S.q = e.target.value.trim(); S.page = 1; go('records'); }
 });
@@ -267,7 +268,7 @@ const RES = {
       { k: 'owner', t: '使用人', sort: true }, { k: 'org_name', t: '单位' }, { k: 'dept_name', t: '部门' },
       { k: 'subnet_cidr', t: '子网', render: r => '<span class="mono">' + esc(r.subnet_cidr) + '</span>' },
       { k: 'tag_names', t: '标签' },
-      { k: 'online_text', t: '在线', render: r => r.is_online ? '<span class="badge in_use">在线</span>' : '<span class="badge">离线</span>' },
+      { k: 'online_text', t: '在线', render: r => onlineBadge(r) },
       { k: 'updated_at', t: '更新时间', sort: true },
     ],
     filters: [
@@ -446,6 +447,16 @@ function cell(r, c) {
   return esc(v == null ? '' : v);
 }
 
+/* 从未执行过在线探测的记录显示「未探测」，避免与真正探测出离线相混淆；
+   鼠标悬停可看到最近一次探测时间。 */
+function onlineBadge(r) {
+  const tip = r.last_scan_time ? '最近探测：' + r.last_scan_time : '尚未执行在线探测';
+  if (!r.last_scan_time) return '<span class="badge" title="' + attr(tip) + '">未探测</span>';
+  return r.is_online
+    ? '<span class="badge in_use" title="' + attr(tip) + '">在线</span>'
+    : '<span class="badge" title="' + attr(tip) + '">离线</span>';
+}
+
 async function renderCrud(key) {
   const cfg = RES[key];
   if (!cfg) { $('#view').innerHTML = '<div class="card">未知页面</div>'; return; }
@@ -453,6 +464,7 @@ async function renderCrud(key) {
   let data;
   try { data = await api('GET', cfg.endpoint + '?' + queryString(cfg)); }
   catch (e) { $('#view').innerHTML = '<div class="card"><div class="empty">' + esc(e.message) + '</div></div>'; return; }
+  S.pageIds = data.items.map(x => x.id);
 
   const canWrite = !(cfg.adminOnly && S.user.role !== 'admin');
   let html = '<div class="toolbar">';
@@ -558,11 +570,18 @@ async function renderCrud(key) {
 }
 
 async function batch(key, action, value, tags) {
-  if (!S.selected.size) return toast('请先选择记录', 'err');
+  let ids = Array.from(S.selected);
+  if (!ids.length) {
+    /* 在线探测未勾选任何记录时自动探测当前页全部记录，
+       避免「已选 0 项」时按钮看似点了却什么都没发生。 */
+    if (action === 'probe' && S.pageIds.length) ids = S.pageIds.slice();
+    else return toast('请先选择记录', 'err');
+  }
   try {
-    const body = { ids: Array.from(S.selected), value };
+    const body = { ids, value };
     if (tags) body.tags = tags;
     const path = action === 'probe' ? 'records/probe' : 'records/batch_' + action;
+    if (action === 'probe') toast('正在探测 ' + ids.length + ' 个地址…');
     const out = await api('POST', path, body);
     toast(out.detail || ('探测完成：在线 ' + out.online + ' 条'));
     S.selected.clear(); renderCrud(key);
@@ -843,25 +862,9 @@ async function renderAudit() {
 async function renderSettings() {
   let info;
   try { info = await api('GET', 'settings/info'); } catch (e) { return toast(e.message, 'err'); }
-  const b = info.branding || {};
-  let html = '<div class="two-col">';
-  html += '<div class="card"><div class="card-title">基本设置</div>' +
-    '<label class="small muted">系统名称</label><div style="display:flex;gap:8px;margin:6px 0 16px"><input id="setAppName" style="flex:1" value="' + attr(info.app_name) + '"><button class="btn btn-primary" id="saveAppName">保存</button></div>' +
-    '<label class="small muted">界面模式</label><div style="display:flex;gap:8px;margin:6px 0 16px"><select id="setMode" style="flex:1">' +
-    opts([{ value: 'normal', label: '标准' }, { value: 'compact', label: '紧凑' }, { value: 'readonly', label: '只读提醒' }], info.system_mode, undefined) +
-    '</select><button class="btn" id="saveMode">保存</button></div>' +
-    '<div class="hint">只读提醒模式仅作为界面标记，实际权限由账号角色决定。</div></div>';
-  html += '<div class="card"><div class="card-title">版权与联系信息（显示为你的信息）</div>' +
-    '<div class="hint">这些信息只保存在本机配置中，用于登录页与「关于」页面展示；可随时修改为你自己的信息。</div>' +
-    '<div class="form-grid">' +
-    '<div><label>作者 / 维护者</label><input id="bOwner" value="' + attr(b.owner_name) + '" placeholder="作者名"></div>' +
-    '<div><label>联系邮箱</label><input id="bEmail" value="' + attr(b.contact_email) + '" placeholder="填你的邮箱"></div>' +
-    '<div class="full"><label>QQ群 / 其他联系方式</label><input id="bContact" value="' + attr(b.contact) + '" placeholder="可留空"></div>' +
-    '<div class="full"><label>版权声明</label><input id="bCopyright" value="' + attr(b.copyright) + '" placeholder="留空自动生成"></div>' +
-    '<div class="full"><label>开源地址</label><input id="bSourceUrl" value="' + attr(b.source_url || SOURCE_DEFAULT) + '" placeholder="https://github.com/..."></div>' +
-    '<div class="full"><label>免责声明</label><textarea id="bDisclaimer" rows="4">' + esc(b.disclaimer) + '</textarea></div>' +
-    '</div><div style="margin-top:12px"><button class="btn btn-primary" id="saveBranding">保存信息</button></div></div>';
-  html += '</div>';
+  /* 系统名称 / 界面模式 / 版权与联系信息不在本页展示，也不提供修改入口：
+     统一由安装向导、配置向导与 branding.json 管理。 */
+  let html = '';
   html += '<div class="card"><div class="card-title">字段显示名称</div><p class="muted small">自定义列表与表单中字段的显示文字。</p><div id="labelRows"></div>' +
     '<div style="margin-top:12px"><button class="btn btn-primary" id="saveLabels">保存字段名称</button></div></div>';
   html += '<div class="card"><div class="card-title">修改登录密码</div><div class="toolbar">' +
@@ -877,23 +880,6 @@ async function renderSettings() {
     '<div><label>' + esc(defaults[k]) + ' <span class="dim mono">' + esc(k) + '</span></label>' +
     '<input data-label="' + attr(k) + '" value="' + attr(labels[k]) + '"></div>').join('') + '</div>';
 
-  $('#saveAppName').onclick = async () => {
-    try { await api('POST', 'settings/app_name', { app_name: $('#setAppName').value.trim() }); toast('已保存'); await bootRefresh(); }
-    catch (e) { toast(e.message, 'err'); }
-  };
-  $('#saveMode').onclick = async () => {
-    try { await api('POST', 'settings/system_mode', { mode: $('#setMode').value }); toast('已保存'); }
-    catch (e) { toast(e.message, 'err'); }
-  };
-  $('#saveBranding').onclick = async () => {
-    try {
-      await api('POST', 'settings/branding', {
-        owner_name: $('#bOwner').value, contact_email: $('#bEmail').value, contact: $('#bContact').value,
-        copyright: $('#bCopyright').value, source_url: $('#bSourceUrl').value,
-        disclaimer: $('#bDisclaimer').value });
-      toast('联系信息已保存');
-    } catch (e) { toast(e.message, 'err'); }
-  };
   $('#saveLabels').onclick = async () => {
     const obj = {}; $$('[data-label]').forEach(el => obj[el.dataset.label] = el.value);
     try { await api('POST', 'settings/field_labels', { field_labels: obj }); toast('已保存'); }
@@ -904,10 +890,6 @@ async function renderSettings() {
       $('#oldPass').value = ''; $('#newPass').value = ''; toast('密码已修改');
     } catch (e) { toast(e.message, 'err'); }
   };
-}
-
-async function bootRefresh() {
-  const s = await api('GET', 'session'); onSession(s); renderNav();
 }
 
 async function renderAbout() {
