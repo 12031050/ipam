@@ -9,6 +9,15 @@
 </head>
 <body>
 
+<!-- 启动占位：任何脚本异常 / 资源 404 / 请求超时都会停在这里显示原因，
+     避免整页纯白、用户完全无法判断出了什么问题 -->
+<div id="bootScreen" class="boot-screen">
+  <img class="boot-mark" src="images/icon_64.png" alt="">
+  <div class="boot-title">正在启动 IP 地址管理…</div>
+  <div class="boot-hint" id="bootHint">首次打开需要初始化数据库，请稍候</div>
+  <noscript><div class="boot-err">浏览器已禁用 JavaScript，本应用无法运行。请允许 JavaScript 后刷新页面。</div></noscript>
+</div>
+
 <div id="loginScreen" class="login-screen" hidden>
   <div class="login-card">
     <img class="login-mark" src="images/icon_64.png" alt="IPAM Logo">
@@ -63,5 +72,16 @@
 <div id="toasts" class="toasts"></div>
 
 <script src="app.js"></script>
+<script>
+/* 独立于 app.js 的看门狗：即使 app.js 404、语法不兼容或被拦截，也能给出可读提示 */
+(function () {
+  var el = document.getElementById('bootHint');
+  window.__ipamBootTimer = setTimeout(function () {
+    if (window.__ipamReady || !el) return;
+    el.className = 'boot-err';
+    el.textContent = '加载超时：界面脚本没有正常初始化。请先按 F5 刷新；若仍无效，说明应用服务未运行或页面被浏览器拦截，请把这段提示反馈给作者。';
+  }, 8000);
+})();
+</script>
 </body>
 </html>

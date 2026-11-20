@@ -24,13 +24,30 @@ const linkHtml = (v) => {
     : esc(u);
 };
 
+const REQUEST_TIMEOUT = 20000;
+
 async function api(method, path, body) {
   const opt = { method, credentials: 'same-origin', headers: {} };
   if (body !== undefined) {
     opt.headers['Content-Type'] = 'application/json';
     opt.body = JSON.stringify(body);
   }
-  const res = await fetch('api/' + path.replace(/^\//, ''), opt);
+  /* 加超时：服务进程假死时 fetch 会一直挂着，页面就会停在纯白状态 */
+  let timer = null;
+  if (typeof AbortController === 'function') {
+    const ac = new AbortController();
+    opt.signal = ac.signal;
+    timer = setTimeout(() => ac.abort(), REQUEST_TIMEOUT);
+  }
+  let res;
+  try {
+    res = await fetch('api/' + path.replace(/^\//, ''), opt);
+  } catch (e) {
+    if (e && e.name === 'AbortError') throw new Error('请求超时，请确认应用服务正在运行后刷新页面');
+    throw new Error('无法连接应用服务，请检查服务是否已启动');
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
   let out;
   try { out = await res.json(); } catch (e) { throw new Error('服务器响应格式错误'); }
   if (res.status === 401 && path !== 'login') { showLogin(); throw new Error('请先登录'); }
@@ -115,9 +132,29 @@ function readForm() {
 
 /* ---------------- 启动与登录 ---------------- */
 
+/* 启动占位层：脚本跑起来之后由 hideBoot() 移除；
+   任何异常都停在这一层给出可读原因，而不是留下纯白页面。 */
+function hideBoot() {
+  window.__ipamReady = true;
+  if (window.__ipamBootTimer) clearTimeout(window.__ipamBootTimer);
+  const el = $('#bootScreen');
+  if (el) el.parentNode.removeChild(el);
+}
+function showBootError(msg) {
+  if (window.__ipamReady) return;
+  const hint = $('#bootHint');
+  if (!hint) return;
+  hint.className = 'boot-err';
+  hint.textContent = msg + '（请刷新重试；如持续出现，请把这段提示与飞牛版本一起反馈给作者）';
+}
+window.addEventListener('error', e => {
+  showBootError('页面脚本加载或执行失败：' + (e.message || '未知错误'));
+});
+
 function showLogin(foot) {
   $('#app').hidden = true;
   $('#loginScreen').hidden = false;
+  hideBoot();
   $('#loginFoot').textContent = foot || '';
   const b = S.branding || {};
   const meta = [b.copyright || '© 2026 梦非常浪漫',
@@ -131,6 +168,7 @@ function showLogin(foot) {
 function showApp() {
   $('#loginScreen').hidden = true;
   $('#app').hidden = false;
+  hideBoot();
 }
 
 async function boot() {
@@ -151,7 +189,10 @@ async function boot() {
       $('#loginTitle').textContent = p.branding.app_name || 'IP 地址管理';
       document.title = $('#loginTitle').textContent;
       if (!p.initialized) foot = '尚未初始化管理员，请在飞牛应用中心重新安装本应用。';
-    } catch (err) { /* ignore */ }
+    } catch (err) {
+      /* 服务不可达时把原因带到登录页脚注，避免没有任何提示 */
+      foot = err.message || '无法连接应用服务';
+    }
     showLogin(foot);
   }
 }

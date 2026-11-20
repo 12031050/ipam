@@ -14,21 +14,21 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 当前版本 | **1.0.5** |
-| 安装包 | **`IPAM-1.0.5.fpk`** |
-| 文件大小 | 238.8 KB（244,547 字节） |
-| SHA-256 | `19475d6ad3a4711a2c27166ece3b3a8ef7b36651097cd83243b0e81342dd5fb5` |
+| 当前版本 | **1.0.6** |
+| 安装包 | **`IPAM-1.0.6.fpk`** |
+| 文件大小 | 241.7 KB（247,510 字节） |
+| SHA-256 | `e4ff9397c602c3f5d6009debba32f4e870134196c6e077d6a119534162e2fe5a` |
 | 适用平台 | 飞牛 fnOS ≥ 1.2.0（all 架构），需系统 Python 3.8+ |
 | 服务端口 | `8765` |
 
 **直接下载地址（推荐，点击即可下载）：**
 
-> ### 👉 https://raw.githubusercontent.com/12031050/ipam/main/IPAM-1.0.5.fpk
+> ### 👉 https://raw.githubusercontent.com/12031050/ipam/main/IPAM-1.0.6.fpk
 
 其他入口：
 
-- [仓库内安装包文件](IPAM-1.0.5.fpk)（在 GitHub 文件列表中打开后点 `Download raw file`）
-- [Tags / Releases](https://github.com/12031050/ipam/releases)：已推送 `v1.0.5` 标签，后续版本将在此发布
+- [仓库内安装包文件](IPAM-1.0.6.fpk)（在 GitHub 文件列表中打开后点 `Download raw file`）
+- [Tags / Releases](https://github.com/12031050/ipam/releases)：已推送 `v1.0.6` 标签，后续版本将在此发布
 - 历史版本与变更说明见 [CHANGELOG.md](CHANGELOG.md)
 
 获取源码：
@@ -41,8 +41,8 @@ cd ipam
 下载后可校验完整性（在飞牛 SSH 终端或本机执行）：
 
 ```bash
-sha256sum IPAM-1.0.5.fpk
-# 期望输出：19475d6ad3a4711a2c27166ece3b3a8ef7b36651097cd83243b0e81342dd5fb5
+sha256sum IPAM-1.0.6.fpk
+# 期望输出：e4ff9397c602c3f5d6009debba32f4e870134196c6e077d6a119534162e2fe5a
 ```
 
 ---
@@ -80,7 +80,15 @@ IPAM 是一套运行在**飞牛 fnOS（NAS）**上的 IP 地址与资产台账�
 
 ## 🆕 更新日志
 
-> 完整历史见 [CHANGELOG.md](CHANGELOG.md)，这里只列最近两个版本。
+> 完整历史见 [CHANGELOG.md](CHANGELOG.md)，这里只列最近三个版本。
+
+### 1.0.6（2026-11-20）
+
+- **白屏问题可从界面定位了**：新增启动占位层与 8 秒看门狗。脚本加载失败、接口请求失败或超时，页面会直接显示具体原因（例如「无法连接应用服务，请检查服务是否已启动」），不再整页纯白、用户无从判断。
+- **接口请求增加 20 秒超时**：服务进程假死时不再无限等待。
+- **修复一处会直接导致白屏的服务端缺陷**：请求不存在的静态文件原本会回退返回 `index.html`，浏览器把 HTML 当作 `app.js` 解析即整页空白；现在明确返回 404。
+- **页面与脚本改为不缓存**（`no-store`），升级后不会再因旧 `index.html` / `app.js` 残留出现异常；图片仍缓存 5 分钟。
+- 登录页脚注会显示服务不可达的原因，便于远程用户反馈。
 
 ### 1.0.5（2026-11-14）
 
@@ -98,9 +106,41 @@ IPAM 是一套运行在**飞牛 fnOS（NAS）**上的 IP 地址与资产台账�
 
 ---
 
+## 🩺 打不开 / 白屏排查
+
+v1.0.6 起页面会直接显示失败原因（启动占位层 + 8 秒看门狗）。若仍为纯白，请按顺序执行下面的命令（飞牛 SSH 终端）：
+
+```bash
+# 1. 服务是否在运行（0=运行中，3=未运行）
+bash /var/apps/IPAM/target/cmd/main status; echo "退出码=$?"
+
+# 2. 看启动日志（最常见的失败原因都记在这里）
+tail -n 50 /var/apps/IPAM/var/ipam.log
+
+# 3. 端口是否在监听
+ss -lntp | grep 8765
+
+# 4. 服务端本地是否正常返回页面
+curl -s -o /dev/null -w 'HTTP %{http_code}\n' http://127.0.0.1:8765/
+
+# 5. Python 运行时是否存在
+/usr/bin/python3 -V
+```
+
+对照结论：
+
+| 现象 | 原因 | 处理 |
+| --- | --- | --- |
+| `status` 退出码 3，日志有「未找到 Python 3 运行环境」 | 系统缺 Python 运行时 | 安装飞牛应用中心的 Python 运行时，或在应用中心点「启动」重试 |
+| 第 4 步非 200 | 服务未启动或端口被占用 | 换端口需重装；否则看第 2 步日志 |
+| 第 4 步 200，但桌面窗口仍白 | 浏览器拦截了 iframe（常见于通过 HTTPS / fn Connect 域名访问，而应用走 `http://内网IP:8765`） | 先在浏览器新标签直接打开 `http://<NAS内网IP>:8765` 验证；能打开即确认为混合内容拦截，改用内网 IP 访问飞牛桌面，或等待统一网关版本 |
+| 页面显示「加载超时」 | `app.js` 未加载或被拦截 | 强制刷新（Ctrl+F5）；仍失败请附上该提示 |
+
+---
+
 ## 安装到飞牛 fnOS
 
-1. 从上面的地址下载 `IPAM-1.0.5.fpk`。
+1. 从上面的地址下载 `IPAM-1.0.6.fpk`。
 2. 打开飞牛桌面 **应用中心 → 手动安装（或「安装第三方应用」）**，上传该 `.fpk`。
 3. 按安装向导设置**管理员账号与初始密码**；作者、邮箱、QQ群、开源地址已预填，可保持默认。
 4. 安装完成后，点击桌面图标，或浏览器访问 `http://<NAS_IP>:8765`，用第 3 步的账号登录。
@@ -155,7 +195,7 @@ IPAM/
 ├── branding.json                品牌信息（作者 / 邮箱 / QQ群 / 开源地址 / 免责声明）
 ├── build_fpk.py                  纯 Python 打包器（生成 .fpk）
 ├── ICON.PNG / ICON_256.PNG       应用图标 64 / 256
-├── IPAM-1.0.5.fpk               ← 可直接安装的成品包
+├── IPAM-1.0.6.fpk               ← 可直接安装的成品包
 ├── assets/ipamlogo.png           Logo 源图（透明底 RGBA）
 ├── app/
 │   ├── ui/                       index.html / app.js / style.css / config / images/
@@ -183,7 +223,7 @@ IPAM/
 ```bash
 python build_fpk.py              # 生成 IPAM-<version>.fpk
 python build_fpk.py --check      # 校验已有安装包结构
-python build_fpk.py --version 1.0.5   # 指定版本号并同步 manifest
+python build_fpk.py --version 1.0.6   # 指定版本号并同步 manifest
 ```
 
 ---

@@ -2,6 +2,33 @@
 
 本项目版本号同时记录在 `manifest` 的 `version`、`app/server/core.py` 的 `APP_VERSION` 与服务启动默认值中，发布时三处需保持一致。
 
+## 1.0.6（2026-11-20）
+
+本版针对「安装后打开应用整页白屏、无法判断原因」的反馈做可观测性加固。
+
+### 为什么会白屏
+
+`index.html` 里 `#loginScreen` 与 `#app` 默认带 `hidden`，完全依赖 `boot()` 执行后显隐。只要出现下面任一情况，页面就停在纯白：
+
+1. `app.js` 请求失败或被当成别的类型解析（脚本没跑）；
+2. 接口请求一直挂起（服务进程假死，`fetch` 无超时）；
+3. 浏览器拦截（HTTPS 页面里嵌 `http://ip:port` 的 iframe、扩展或公司策略）；
+4. 服务根本没起来（端口不可达，iframe 内是空白）。
+
+### 修复
+
+- 新增 `#bootScreen` 启动占位层：默认可见，`showLogin()` / `showApp()` 成功后移除；`window.onerror` 捕获脚本异常并直接写在该层。
+- `index.html` 末尾加一段独立于 `app.js` 的内联看门狗：8 秒后若 `window.__ipamReady` 仍为假，把提示改为「加载超时」并给出处置建议。即使 `app.js` 完全没加载，这段也会执行。
+- `api()` 增加 `AbortController` 20 秒超时，超时与连接失败分别给出不同文案。
+- 服务端 `_static` 修正：未知扩展名/不存在的文件返回 **404**，不再回退 `index.html`。原行为会让 `GET /app.js`（文件缺失时）返回 HTML，浏览器按 JS 解析全页失败，是典型的「无声白屏」来源。
+- `_send()` 支持按资源类型覆盖 `Cache-Control`：`html/js/css` 为 `no-store`，图片仍 `public, max-age=300`。升级后不会加载旧资源。
+- 登录页脚注在服务不可达时显示原因（此前静默留空）。
+
+### 回归验证
+
+- `node --check app/ui/app.js`、`python -m py_compile app/server/server.py` 通过；`build_fpk.py --check` 通过（外层 31 项、`app.tgz` 内 15 项）。
+- 本地起服务实测：`GET /` 200 且含 `bootScreen`、`Cache-Control: no-store`；`GET /app.js` 200 且为 `application/javascript` + `no-store`；`GET /nope.js` 404；`GET /records`（无扩展名）仍回退 SPA；`GET /api/ping` 返回 `1.0.6`。
+
 ## 1.0.5（2026-11-14）
 
 本次为界面归位与元信息修复版本。

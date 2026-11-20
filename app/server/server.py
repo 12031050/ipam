@@ -38,13 +38,16 @@ def make_handler(cfg, router, base=""):
             sys.stderr.write("[%s] %s %s\n" % (self.log_date_time_string(), self.address_string(), fmt % args))
 
         def _send(self, status, body, content_type, headers=None, cookie_header=None):
+            headers = dict(headers or {})
+            cache = headers.pop("Cache-Control", None) or (
+                "no-store" if content_type.startswith("application/json") else "public, max-age=300")
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Referrer-Policy", "no-referrer")
-            self.send_header("Cache-Control", "no-store" if content_type.startswith("application/json") else "public, max-age=300")
-            for k, v in (headers or {}).items():
+            self.send_header("Cache-Control", cache)
+            for k, v in headers.items():
                 self.send_header(k, v)
             if cookie_header:
                 self.send_header("Set-Cookie", cookie_header)
@@ -65,15 +68,24 @@ def make_handler(cfg, router, base=""):
             if target != ui_root and not target.startswith(ui_root + os.sep):
                 return self._error(403, "禁止访问")
             ext = os.path.splitext(target)[1].lower()
-            if not os.path.isfile(target) or ext not in ALLOWED_EXT:
+            if not os.path.isfile(target):
+                # 明确请求了静态资源却不存在时必须 404：
+                # 若退回 index.html，浏览器会把 HTML 当 JS/CSS 解析，页面直接白屏且无明显报错。
+                if ext:
+                    return self._error(404, "资源不存在：%s" % rel)
                 target = os.path.join(ui_root, "index.html")
                 ext = ".html"
+            if ext not in ALLOWED_EXT:
+                return self._error(404, "不支持的文件类型：%s" % ext)
             try:
                 with open(target, "rb") as f:
                     body = f.read()
             except OSError:
                 return self._error(404, "页面不存在")
-            self._send(200, body, MIME.get(ext, "application/octet-stream"))
+            # 页面与脚本不缓存，避免升级后仍加载旧版本资源导致白屏
+            no_store = ext in (".html", ".js", ".css")
+            self._send(200, body, MIME.get(ext, "application/octet-stream"),
+                       {"Cache-Control": "no-store"} if no_store else None)
 
         def _handle(self):
             try:
@@ -175,7 +187,7 @@ def run_server(cfg):
         srv = ThreadingUnixServer(cfg.socket_path, handler)
         os.chmod(cfg.socket_path, 0o660)
         print("IPAM %s listening on unix socket %s (base=%s)" % (
-            os.environ.get("IPAM_VERSION", "1.0.5"), cfg.socket_path, base or "/"), flush=True)
+            os.environ.get("IPAM_VERSION", "1.0.6"), cfg.socket_path, base or "/"), flush=True)
     else:
         srv = ThreadingTCPServer((cfg.host, cfg.port), handler)
         print("IPAM listening on http://%s:%s (base=%s)" % (cfg.host, cfg.port, base or "/"), flush=True)

@@ -47,6 +47,18 @@ button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 [hidden] { display: none !important; }
 
+/* ---------- 启动占位（异常兜底，不依赖 app.js） ---------- */
+.boot-screen {
+  position: fixed; inset: 0; z-index: 999;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 32px; text-align: center;
+  background: var(--bg); color: var(--text);
+}
+.boot-mark { width: 64px; height: 64px; border-radius: 14px; box-shadow: var(--shadow); }
+.boot-title { font-size: 17px; font-weight: 600; letter-spacing: .3px; }
+.boot-hint { max-width: 460px; font-size: 13px; line-height: 1.7; color: var(--muted); }
+.boot-err { max-width: 520px; font-size: 13px; line-height: 1.7; color: var(--danger); word-break: break-word; }
+
 /* ---------- 登录 ---------- */
 .login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center;
   background: radial-gradient(circle at 30% 15%, #123047 0%, var(--bg) 58%); padding: 20px; }
